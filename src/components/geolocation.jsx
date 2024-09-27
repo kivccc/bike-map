@@ -1,7 +1,8 @@
 import { Map, MapMarker } from "react-kakao-maps-sdk";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import CustomGeoMarker from "../images/geomarker.png"
 export default function GetGeoLocation(){
+  
     const [state, setState] = useState({
         center: {
           lat: 33.450701,
@@ -48,9 +49,6 @@ export default function GetGeoLocation(){
         RefreshGeoLocation();
     }, [])
 
-    const tmp = () => {
-        console.log(state);
-    };
       return (
         <>
         {!state.isLoading && (
@@ -66,11 +64,14 @@ export default function GetGeoLocation(){
                     height: 24, // 이미지의 높이
                   },
                 }}
+                draggable={true} // 마커를 클릭했을 때 지도의 클릭 이벤트가 발생하지 않도록 설정합니다
             >
-                <div style={{ padding: "5px", color: "#000" }}>
-                  {state.errMsg ? state.errMsg : "사용자의 위치"}
-                </div>
+            <div style={{ padding: "5px", color: "#000" }}>
+              {state.errMsg ? state.errMsg : "사용자의 위치"}
+            </div> 
+            
             </MapMarker>
+            
         )}
         </>
       )

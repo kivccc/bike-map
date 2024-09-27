@@ -1,41 +1,38 @@
 import { Map, MapMarker } from "react-kakao-maps-sdk";
-import { useEffect, useState } from "react";
-import GetGeoLocation from "./geolocation";
+import { SetStateAction, useEffect, useState } from "react";
 import getBikeData from "../axios/getBIkeData";
 
-export default function KakaoMap() {
-  const [bikeData, setbikeData] = useState();
-  const [bikePositionData, setbikePositionData] = useState([]);
-  const [selectedStationId, setSelectedStationId] = useState(null); // 선택된 마커의 ID를 저장
 
+interface Station {
+    stationId: string;
+    stationLatitude: string;
+    stationLongitude: string;
+    stationName: string;
+    parkingBikeTotCnt: number;
+  }
+
+export default function BasicMap() {
+
+
+  const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
+  const [bikePositionData, setbikePositionData] = useState<Station[]>([]);
+
+  // 자전거 api에서 데이터 받아와서 저장
   useEffect(() => {
     getBikeData()
       .then((data) => {
         setbikePositionData(data.row);
-        setbikeData(data);
       })
       .catch((error) => {
         console.error("Error fetching data:", error);
       });
   }, []);
 
-  const tmp = () => {
-    console.log(bikeData);
-    console.log(bikePositionData);
+const handleMarkerClick = (stationId: string) => {
+    setSelectedStationId(stationId);
   };
-
-  const handleMarkerClick = (stationId) => {
-    if (selectedStationId === stationId) {
-      setSelectedStationId(null); // 이미 클릭된 마커를 클릭하면 InfoWindow 닫기
-    } else {
-      setSelectedStationId(stationId); // 새 마커 클릭 시 InfoWindow 열기
-    }
-  };
-
   return (
     <>
-      <button onClick={tmp}>Show Bike Data</button>
-
       <Map
         center={{
           lat: 37.558306,
@@ -49,15 +46,6 @@ export default function KakaoMap() {
         }}
         level={5}
       >
-        {/* 지도 중앙에 마커 표시 */}
-        <MapMarker
-          position={{
-            lat: 37.558306,
-            lng: 127.005342,
-          }}
-        />
-        <GetGeoLocation></GetGeoLocation>
-        
         {/* bikePositionData에 있는 각 정류소 데이터를 기반으로 마커와 InfoWindow 생성 */}
         {bikePositionData.map((station) => (
           <MapMarker
@@ -94,7 +82,8 @@ export default function KakaoMap() {
             )}
           </MapMarker>
         ))}
-      </Map>
+        </Map>
+      
     </>
   );
 }

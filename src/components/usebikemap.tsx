@@ -1,7 +1,9 @@
-import { Map, MapMarker } from "react-kakao-maps-sdk";
-import { SetStateAction, useEffect, useState } from "react";
+import { Map, MapMarker ,CustomOverlayMap} from "react-kakao-maps-sdk";
+import { SetStateAction, useCallback, useEffect, useRef, useState } from "react";
 import getBikeData from "../axios/getBIkeData";
 
+import useGeoLocation from "./usegeolocation";
+import CustomGeoMarker from "../images/geomarker.png"
 
 interface Station {
     stationId: string;
@@ -11,6 +13,16 @@ interface Station {
     parkingBikeTotCnt: number;
   }
 
+
+  interface LatLng {
+    lat: number;
+    lng: number;
+  }
+  
+  interface Point {
+    x: number;
+    y: number;
+  }  
 export default function BasicMap() {
 
 
@@ -31,59 +43,209 @@ export default function BasicMap() {
 const handleMarkerClick = (stationId: string) => {
     setSelectedStationId(stationId);
   };
+
+ 
+  const startPoint = useRef<Point>({ x: 0, y: 0 });
+  const overlayPoint = useRef<any>(null);
+  const mapRef = useRef<any>(null);  
+
+
+  const location = useGeoLocation(); // Use the custom hook to get the user's location
+  const [position, setPosition] = useState<LatLng>({
+    lat: 37.54699, // Default fallback coordinates
+    lng: 127.09598,
+  });
+  const [startposition, setStartPosition] = useState<LatLng>({
+    lat: 37.54699, // Default fallback coordinates
+    lng: 127.09598,
+  });
+
+    // Update the position when the user's location is available
+    useEffect(() => {
+      if (location) {
+        setPosition({
+          lat: location.lat,
+          lng: location.lng,
+        });
+        setStartPosition({
+          lat: location.lat,
+          lng: location.lng,
+        });
+      }
+    }, [location]);
+  
+    const onMouseMove = useCallback(
+      (e: MouseEvent) => {
+        e.preventDefault();
+        const map = mapRef.current;
+  
+        if (!map) return;
+        const proj = map.getProjection();
+        const deltaX = startPoint.current.x - e.clientX;
+        const deltaY = startPoint.current.y - e.clientY;
+  
+        const newPoint = new window.kakao.maps.Point(
+          overlayPoint.current.x - deltaX,
+          overlayPoint.current.y - deltaY
+        );
+  
+        const newPos = proj.coordsFromContainerPoint(newPoint);
+  
+        setPosition({
+          lat: newPos.getLat(),
+          lng: newPos.getLng(),
+        });
+      },
+      []
+    );
+
+    const onMouseUp = useCallback(() => {
+      document.removeEventListener("mousemove", onMouseMove);
+    }, [onMouseMove]);
+  
+
+    const [showText, setShowText] = useState(true); // 초기 위치 텍스트 표시 여부 상태
+    const hideText = useCallback(() => {
+      setShowText(false); // 텍스트 숨기기
+    }, []);
+
+    const onMouseDown = useCallback(
+      (e: React.MouseEvent<HTMLDivElement>) => {
+        e.preventDefault();
+  
+        const map = mapRef.current;
+  
+        if (!map) return;
+        const proj = map.getProjection();
+  
+        window.kakao.maps.event.preventMap();
+  
+        startPoint.current.x = e.clientX;
+        startPoint.current.y = e.clientY;
+  
+        overlayPoint.current = proj.containerPointFromCoords(
+          new window.kakao.maps.LatLng(position.lat, position.lng)
+        );
+  
+        document.addEventListener("mousemove", onMouseMove);
+      },
+      [onMouseMove, position.lat, position.lng]
+    );
+
+    useEffect(() => {
+      document.addEventListener("mouseup", onMouseUp);
+  
+      return () => {
+        document.removeEventListener("mouseup", onMouseUp);
+      };
+    }, [onMouseUp]);
+
+
+
+
   return (
     <>
-      <Map
-        center={{
-          lat: 37.558306,
-          lng: 127.005342,
-        }}
-        style={{
-          width: "100%",
-          height: "450px",
-          borderRadius: "20px",
-          boxShadow: "0 4px 20px rgba(0, 0, 0, 0.2)",
-        }}
-        level={5}
-      >
-        {/* bikePositionData에 있는 각 정류소 데이터를 기반으로 마커와 InfoWindow 생성 */}
-        {bikePositionData.map((station) => (
-          <MapMarker
-            key={station.stationId}
-            position={{
-              lat: parseFloat(station.stationLatitude),
-              lng: parseFloat(station.stationLongitude),
+    <div className="map-wrapper">
+<Map
+  id={'map'}
+  center={startposition}
+  className="map-container"
+  style={{
+    width: "100%",
+    height: "850px",
+    borderRadius: "20px",
+    boxShadow: "0 4px 20px rgba(0, 0, 0, 0.2)",
+  }}
+  level={4}
+  ref={mapRef}
+>
+  {bikePositionData.map((station) => (
+    <MapMarker
+      key={station.stationId}
+      position={{
+        lat: parseFloat(station.stationLatitude),
+        lng: parseFloat(station.stationLongitude),
+      }}
+      clickable={true}
+      onClick={() => handleMarkerClick(station.stationId)}
+    >
+      {selectedStationId === station.stationId && (
+        <div className="info-window" style={{ position: "relative" }}>
+          <div
+            style={{
+              padding: "10px",
+              backgroundColor: "#fff",
+              borderRadius: "8px",
+              boxShadow: "0 2px 6px rgba(0, 0, 0, 0.2)",
+              color: "#333",
+              fontFamily:
+                '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+              fontSize: "13px",
             }}
-            clickable={true} // 클릭 가능 설정
-            onClick={() => handleMarkerClick(station.stationId)} // 클릭 시 마커 정보 표시
+            onClick={() => setSelectedStationId(null)}
           >
-            {/* 클릭된 마커에만 InfoWindow 표시 */}
-            {selectedStationId === station.stationId && (
-              <div style={{ minWidth: "250px", position: "relative" }}>
-                <div
-                  style={{
-                    padding: "10px",
-                    backgroundColor: "#fff",
-                    borderRadius: "8px",
-                    boxShadow: "0 2px 6px rgba(0, 0, 0, 0.2)",
-                    color: "#333",
-                    fontFamily:
-                      '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-                    fontSize: "13px",
-                  }}
-                  onClick={() => setSelectedStationId(null)} 
-                >
-                  <strong>정류소 이름 :</strong> {station.stationName}
-                  <br />
-                  <strong>자전거 개수 :</strong> {station.parkingBikeTotCnt}
-                </div>
-                
-              </div>
-            )}
-          </MapMarker>
-        ))}
-        </Map>
-      
+            <strong>정류소 이름 :</strong> {station.stationName}
+            <br />
+            <strong>자전거 개수 :</strong> {station.parkingBikeTotCnt}
+          </div>
+        </div>
+      )}
+    </MapMarker>
+  ))}
+ 
+          <CustomOverlayMap position={position}>
+          <div onMouseDown={onMouseDown} onMouseMove={hideText} className="overlay"
+              style={{
+                position: "absolute",
+                width: "80px", // 마커의 width
+                height: "80px", // 마커의 height
+                top: "50%", // 중앙 정렬을 위해
+                left: "50%",
+                transform: "translate(-50%, -100%)", // 마커의 중앙이 기준이 되도록 위치 조정
+                backgroundColor: "transparent", // 투명하게
+                zIndex: 10, // 마커보다 위에 위치하게 설정
+              }}>
+                        {showText && (
+          <div
+            style={{
+              position: "absolute",
+              bottom: "80px", // 마커 위쪽에 위치하게 설정
+              left: "50%",
+              transform: "translateX(-50%)", // 중앙 정렬
+              padding: "5px 10px",
+              backgroundColor: "#fff",
+              borderRadius: "8px",
+              boxShadow: "0 2px 6px rgba(0, 0, 0, 0.2)",
+              color: "#333",
+              fontSize: "12px",
+            }}
+          >
+            당신의 현재 위치인가요?
+          </div>
+        )}
+          <MapMarker // 마커를 생성합니다
+          position={position}
+          image={{
+            src: CustomGeoMarker, // 마커이미지의 주소입니다
+            size: {
+              width: 64,
+              height: 69,
+            }, // 마커이미지의 크기입니다
+            options: {
+              offset: {
+                x: 27,
+                y: 69,
+              }, // 마커이미지의 옵션입니다. 마커의 좌표와 일치시킬 이미지 안에서의 좌표를 설정합니다.
+            },
+          }}
+          
+        />
+        
+          </div>
+          
+        </CustomOverlayMap>
+</Map>
+      </div>
     </>
   );
 }

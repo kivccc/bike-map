@@ -1,9 +1,17 @@
 import { Map, MapMarker ,CustomOverlayMap} from "react-kakao-maps-sdk";
 import { SetStateAction, useCallback, useEffect, useRef, useState } from "react";
 import getBikeData from "../axios/getBIkeData";
-
 import useGeoLocation from "./usegeolocation";
 import CustomGeoMarker from "../images/geomarker.png"
+import "../assets/style.css"
+
+import {
+  BrowserView,
+  MobileView,
+  isBrowser,
+  isMobile,
+} from "react-device-detect"
+
 
 interface Station {
     stationId: string;
@@ -75,14 +83,23 @@ const handleMarkerClick = (stationId: string) => {
     }, [location]);
   
     const onMouseMove = useCallback(
-      (e: MouseEvent) => {
+      (e: MouseEvent | TouchEvent) => {
         e.preventDefault();
         const map = mapRef.current;
-  
         if (!map) return;
+  
         const proj = map.getProjection();
-        const deltaX = startPoint.current.x - e.clientX;
-        const deltaY = startPoint.current.y - e.clientY;
+        let deltaX, deltaY;
+  
+        if ('clientX' in e) {
+          // Mouse move
+          deltaX = startPoint.current.x - e.clientX;
+          deltaY = startPoint.current.y - e.clientY;
+        } else {
+          // Touch move
+          deltaX = startPoint.current.x - e.touches[0].clientX;
+          deltaY = startPoint.current.y - e.touches[0].clientY;
+        }
   
         const newPoint = new window.kakao.maps.Point(
           overlayPoint.current.x - deltaX,
@@ -90,7 +107,6 @@ const handleMarkerClick = (stationId: string) => {
         );
   
         const newPos = proj.coordsFromContainerPoint(newPoint);
-  
         setPosition({
           lat: newPos.getLat(),
           lng: newPos.getLng(),
@@ -98,67 +114,78 @@ const handleMarkerClick = (stationId: string) => {
       },
       []
     );
-
+  
     const onMouseUp = useCallback(() => {
-      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('touchmove', onMouseMove);
     }, [onMouseMove]);
   
-
-    const [showText, setShowText] = useState(true); // 초기 위치 텍스트 표시 여부 상태
-    const hideText = useCallback(() => {
-      setShowText(false); // 텍스트 숨기기
-    }, []);
-
     const onMouseDown = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
         e.preventDefault();
-  
         const map = mapRef.current;
-  
         if (!map) return;
-        const proj = map.getProjection();
   
+        const proj = map.getProjection();
         window.kakao.maps.event.preventMap();
   
-        startPoint.current.x = e.clientX;
-        startPoint.current.y = e.clientY;
+        if ('clientX' in e) {
+          // Mouse down
+          startPoint.current.x = e.clientX;
+          startPoint.current.y = e.clientY;
+        } else {
+          // Touch start
+          startPoint.current.x = e.touches[0].clientX;
+          startPoint.current.y = e.touches[0].clientY;
+        }
   
         overlayPoint.current = proj.containerPointFromCoords(
           new window.kakao.maps.LatLng(position.lat, position.lng)
         );
   
-        document.addEventListener("mousemove", onMouseMove);
+        if ('clientX' in e) {
+          // Mouse events
+          document.addEventListener('mousemove', onMouseMove);
+        } else {
+          // Touch events
+          document.addEventListener('touchmove', onMouseMove);
+        }
       },
       [onMouseMove, position.lat, position.lng]
     );
-
+  
     useEffect(() => {
-      document.addEventListener("mouseup", onMouseUp);
+      document.addEventListener('mouseup', onMouseUp);
+      document.addEventListener('touchend', onMouseUp);
   
       return () => {
-        document.removeEventListener("mouseup", onMouseUp);
+        document.removeEventListener('mouseup', onMouseUp);
+        document.removeEventListener('touchend', onMouseUp);
       };
     }, [onMouseUp]);
 
 
 
 
+
+
+    const [showText, setShowText] = useState(true); // 초기 위치 텍스트 표시 여부 상태
+    const hideText = useCallback(() => {
+      setShowText(false); // 텍스트 숨기기
+    }, []);
+
   return (
-    <>
+    
     <div className="map-wrapper">
 <Map
   id={'map'}
   center={startposition}
   className="map-container"
-  style={{
-    width: "100%",
-    height: "850px",
-    borderRadius: "20px",
-    boxShadow: "0 4px 20px rgba(0, 0, 0, 0.2)",
-  }}
   level={4}
   ref={mapRef}
 >
+
+
   {bikePositionData.map((station) => (
     <MapMarker
       key={station.stationId}
@@ -192,9 +219,12 @@ const handleMarkerClick = (stationId: string) => {
       )}
     </MapMarker>
   ))}
- 
+ <div className="refresh-button">Refresh</div>
           <CustomOverlayMap position={position}>
-          <div onMouseDown={onMouseDown} onMouseMove={hideText} className="overlay"
+          <div
+              onMouseDown={!isMobile ? onMouseDown : undefined}
+              onTouchStart={isMobile ? onMouseDown : undefined}
+              onMouseMove={hideText} className="overlay"
               style={{
                 position: "absolute",
                 width: "80px", // 마커의 width
@@ -205,7 +235,7 @@ const handleMarkerClick = (stationId: string) => {
                 backgroundColor: "transparent", // 투명하게
                 zIndex: 10, // 마커보다 위에 위치하게 설정
               }}>
-                        {showText && (
+          {showText && (
           <div
             style={{
               position: "absolute",
@@ -221,6 +251,8 @@ const handleMarkerClick = (stationId: string) => {
             }}
           >
             당신의 현재 위치인가요?
+            <div>{window.innerWidth}</div>
+            <div>{window.innerHeight}</div>
           </div>
         )}
           <MapMarker // 마커를 생성합니다
@@ -244,8 +276,9 @@ const handleMarkerClick = (stationId: string) => {
           </div>
           
         </CustomOverlayMap>
+        
 </Map>
       </div>
-    </>
+    
   );
 }
